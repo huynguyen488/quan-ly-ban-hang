@@ -66,6 +66,7 @@ export const categories = sqliteTable('categories', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
   parent_id: integer('parent_id'),
+  description: text('description'), // 🔥 Thêm chính xác cột description dạng text vào đây
 });
 
 // 7. BẢNG THÔNG TIN SHOP (Shop_Info)
