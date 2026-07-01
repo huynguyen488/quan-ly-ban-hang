@@ -1,4 +1,3 @@
-// actions.ts (Dùng chung cho cả POS và Orders)
 "use server";
 
 import { db } from "../../src/db";
@@ -6,13 +5,9 @@ import { orders, orderItems, products, customers } from "../../src/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-export async function quickAddCustomer(name: string, phone: string) {
-  const newCus = await db.insert(customers).values({ name, phone }).returning({ id: customers.id });
-  revalidatePath("/pos");
-  revalidatePath("/customers");
-  return newCus[0].id;
-}
-
+// ==========================================
+// CÁC HÀM TIỆN ÍCH & XÁC THỰC
+// ==========================================
 export async function getOrderItems(orderId: string) {
   return await db.select().from(orderItems).where(eq(orderItems.order_id, orderId));
 }
@@ -20,6 +15,20 @@ export async function getOrderItems(orderId: string) {
 export async function verifyAdminAuth(username: string, password: string) {
   if (username.trim() === "admin" && password === "123456") return { success: true };
   return { success: false, message: "Sai tài khoản hoặc mật khẩu quản trị!" };
+}
+
+// 🔥 HÀM THÊM KHÁCH NHANH TỪ POS (Full Tên, SĐT, Địa chỉ, Ghi chú)
+export async function quickAddCustomer(name: string, phone: string, address: string = "", note: string = "") {
+  const newCus = await db.insert(customers).values({ 
+    name, 
+    phone, 
+    address, 
+    note 
+  }).returning({ id: customers.id });
+  
+  revalidatePath("/pos");
+  revalidatePath("/customers");
+  return newCus[0].id;
 }
 
 // ==========================================
@@ -44,7 +53,7 @@ export async function createOrder(data: any) {
     note: finalNote,
   });
 
-  // 2. BULK INSERT: Nhét toàn bộ giỏ hàng vào DB trong 1 câu lệnh duy nhất (Cực nhanh)
+  // 2. BULK INSERT: Nhét toàn bộ giỏ hàng vào DB
   if (cart.length > 0) {
     const itemsToInsert = cart.map((item: any) => ({
       order_id: newOrderId,
@@ -71,7 +80,6 @@ export async function createOrder(data: any) {
     }
   });
   
-  // Đợi tất cả các query chạy song song hoàn tất
   await Promise.all(updatePromises);
 
   revalidatePath("/pos"); revalidatePath("/orders"); revalidatePath("/products");
@@ -87,7 +95,7 @@ export async function updateOrderComplete(orderId: string, updatedData: any) {
   const customNote = note ? `${note} | ` : "";
   const finalNote = `${customNote}Đã sửa đơn | Khách đưa: ${amountGiven} | CK: ${discount}`;
 
-  // 1. HOÀN TRẢ KHO CŨ BẰNG PROMISE.ALL (Chạy song song)
+  // 1. HOÀN TRẢ KHO CŨ BẰNG PROMISE.ALL
   const oldItems = await db.select().from(orderItems).where(eq(orderItems.order_id, orderId));
   
   const rollbackPromises = oldItems.map(async (oldItem) => {
@@ -103,7 +111,7 @@ export async function updateOrderComplete(orderId: string, updatedData: any) {
   });
   await Promise.all(rollbackPromises);
 
-  // 2. XÓA CŨ GHI MỚI CHI TIẾT ĐƠN HÀNG VÀ CẬP NHẬT ĐƠN (Chạy song song)
+  // 2. XÓA CŨ GHI MỚI CHI TIẾT ĐƠN HÀNG VÀ CẬP NHẬT ĐƠN
   await Promise.all([
     db.delete(orderItems).where(eq(orderItems.order_id, orderId)),
     db.update(orders).set({
@@ -131,7 +139,7 @@ export async function updateOrderComplete(orderId: string, updatedData: any) {
     await db.insert(orderItems).values(newItemsToInsert as any);
   }
 
-  // 4. TRỪ KHO MỚI BẰNG PROMISE.ALL (Chạy song song)
+  // 4. TRỪ KHO MỚI BẰNG PROMISE.ALL
   const applyNewStockPromises = cart.map(async (item: any) => {
     const [prod] = await db.select().from(products).where(eq(products.id, item.product.id)).limit(1);
     if (prod) {

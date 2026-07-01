@@ -25,18 +25,24 @@ export default async function CustomerDetailPage(props: any) {
   const normalize = (s: string | null) => (s || "").trim().toLowerCase();
   const targetName = normalize(customer.name);
 
-  // Lọc tất cả đơn hàng thuộc về khách này
+  // Lọc tất cả đơn hàng thuộc về khách này (Giữ nguyên để truyền xuống UI hiển thị lịch sử)
   const customerOrders = allOrders.filter(o => normalize(o.customer_name) === targetName);
   
   // Lọc tất cả phiếu thu thuộc về khách này
   const customerReceipts = allReceipts.filter(r => normalize(r.customer_name) === targetName);
 
-  // 3. Tính toán các chỉ số kinh doanh chuẩn xác
-  const totalOrdersCount = customerOrders.length;
-  const totalSpentMoney = customerOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+  // 🔥 BỌC THÉP: Lọc riêng các đơn HỢP LỆ (Không bị hủy) để làm toán
+  const validOrders = customerOrders.filter(o => {
+    const s = String(o.status || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return !(s.includes("huy") || s.includes("cancel"));
+  });
+
+  // 3. Tính toán các chỉ số kinh doanh chuẩn xác (Dùng validOrders thay vì customerOrders)
+  const totalOrdersCount = validOrders.length;
+  const totalSpentMoney = validOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
   
-  // 🔥 LỌC CHUẨN XÁC: Chỉ tính tổng tiền của các đơn "Chưa thanh toán" (Đơn nợ)
-  const unpaidOrders = customerOrders.filter(o => {
+  // LỌC CHUẨN XÁC: Chỉ tính tổng tiền của các đơn "Chưa thanh toán" (Đơn nợ)
+  const unpaidOrders = validOrders.filter(o => {
     const s = String(o.status || "").trim().toLowerCase();
     const isPaid = s.includes('đã thanh toán') || s.includes('hoàn thành') || s.includes('paid') || s === '1' || s === 'true' || s === 'success';
     return !isPaid;
@@ -45,7 +51,7 @@ export default async function CustomerDetailPage(props: any) {
   const totalUnpaidMoney = unpaidOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
   const totalPaidThroughReceipts = customerReceipts.reduce((sum, r) => sum + (r.amount || 0), 0);
   
-  // 🔥 Dư nợ = Tổng tiền nợ mua chịu - Tổng tiền đã trả qua phiếu thu
+  // Dư nợ = Tổng tiền nợ mua chịu - Tổng tiền đã trả qua phiếu thu
   const currentDebt = totalUnpaidMoney - totalPaidThroughReceipts;
 
   return (
@@ -56,7 +62,7 @@ export default async function CustomerDetailPage(props: any) {
         totalSpent: totalSpentMoney,
         currentDebt: currentDebt > 0 ? currentDebt : 0
       }}
-      orders={customerOrders}
+      orders={customerOrders} // Vẫn truyền toàn bộ đơn (kể cả hủy) để hiện trong danh sách giao dịch bên phải
       receipts={customerReceipts}
     />
   );

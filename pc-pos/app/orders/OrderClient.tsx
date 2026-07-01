@@ -34,37 +34,36 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
   const [adminUser, setAdminUser] = useState("");
   const [adminPass, setAdminPass] = useState("");
 
- // 🔥 HÀM BỌC THÉP MỚI: Bóc tách chính xác cả NGÀY và GIỜ
+// 🔥 HÀM BỌC THÉP V2: ÉP ĐỌC THEO CHUẨN VIỆT NAM (DD/MM/YYYY) TRƯỚC!
   const parseSafeDate = (dateStr: string) => {
     if (!dateStr) return new Date();
     
-    // Thử dịch theo chuẩn quốc tế trước
-    let d = new Date(dateStr);
-    if (!isNaN(d.getTime())) return d;
-
-    // Nếu là chuẩn Việt Nam (VD: 15:30:00 01/07/2026), tự động bóc tách từng số
+    // 1. Ưu tiên bóc tách định dạng Việt Nam trước (Ngày/Tháng/Năm)
     const dateMatch = dateStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
     const timeMatch = dateStr.match(/(\d{1,2}):(\d{1,2})/);
 
     if (dateMatch) {
-      const year = dateMatch[3];
-      const month = dateMatch[2].padStart(2, '0');
-      const day = dateMatch[1].padStart(2, '0');
+      const day = dateMatch[1].padStart(2, '0');   // Lấy Ngày
+      const month = dateMatch[2].padStart(2, '0'); // Lấy Tháng
+      const year = dateMatch[3];                   // Lấy Năm
       
       let hours = "00";
       let minutes = "00";
       
-      // Bắt chính xác giờ phút sếp đã lưu
       if (timeMatch) {
         hours = timeMatch[1].padStart(2, '0');
         minutes = timeMatch[2].padStart(2, '0');
       }
       
-      // Ghép lại thành chuẩn ISO để hệ thống thấu hiểu
-      d = new Date(`${year}-${month}-${day}T${hours}:${minutes}:00`);
+      // Ghép lại thành chuẩn ISO (Năm-Tháng-Ngày) để JavaScript không bao giờ hiểu sai
+      const isoString = `${year}-${month}-${day}T${hours}:${minutes}:00`;
+      const d = new Date(isoString);
+      if (!isNaN(d.getTime())) return d;
     }
-    
-    return isNaN(d.getTime()) ? new Date() : d;
+
+    // 2. Nếu chuỗi bị lỗi hầm bà lằng không có ngày tháng, mới ném cho JS tự xử
+    const fallbackDate = new Date(dateStr);
+    return isNaN(fallbackDate.getTime()) ? new Date() : fallbackDate;
   };
 
   const checkIsPaid = (status: any) => {
