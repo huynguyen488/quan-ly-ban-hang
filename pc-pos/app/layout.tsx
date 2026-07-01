@@ -4,10 +4,6 @@ import "./globals.css";
 import Sidebar from "../src/components/Sidebar";
 import { Toaster } from 'react-hot-toast';
 
-// trong layout.tsx hoặc page.tsx
-<Toaster position="top-right" />
-// import Header from "../src/components/Header"; // 1. Đã tắt import Header
-
 const inter = Inter({ subsets: ["latin", "vietnamese"] });
 
 export const metadata: Metadata = {
@@ -23,13 +19,15 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body className={`${inter.className} bg-slate-50 overflow-hidden flex h-screen w-full`}>
-        {/* Cột trái: Sidebar cố định */}
+        {/* Đưa Toaster vào đúng chuẩn React */}
+        <Toaster position="top-right" />
+        
+        {/* Cột trái: Sidebar (Đã tích hợp cơ chế đóng/mở Mobile) */}
         <Sidebar />
 
-        {/* Cột phải: Chỉ còn Nội dung chính, không còn Header chiếm chỗ nữa */}
-        <div className="flex-1 flex flex-col h-screen overflow-hidden">
-          {/* <Header />  <-- 2. Đã vô hiệu hóa thẻ Header ở đây */}
-          
+        {/* Cột phải: Nội dung chính */}
+        {/* 🔥 LƯU Ý: Thêm pt-14 trên mobile để bù chỗ cho Thanh Menu Bar, trên desktop (lg) trả về 0 */}
+        <div className="flex-1 flex flex-col h-screen overflow-hidden pt-14 lg:pt-0">
           <main className="flex-1 overflow-y-auto">
             {children}
           </main>

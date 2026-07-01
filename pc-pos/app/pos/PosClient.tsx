@@ -29,7 +29,6 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
   const searchCustomerRef = useRef<HTMLDivElement>(null);
 
-  // 🔥 State cho Popup Thêm khách nhanh (Đã bổ sung Địa chỉ & Ghi chú)
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCusName, setNewCusName] = useState("");
   const [newCusPhone, setNewCusPhone] = useState("");
@@ -109,7 +108,6 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
     return `${hours}:${minutes}:00 ${day}/${month}/${year}`;
   };
 
-  // 🔥 Hàm xử lý tạo khách hàng nhanh (Đẩy đủ 4 trường dữ liệu)
   const handleQuickAddCustomer = async () => {
     if (!newCusName.trim()) return alert("Vui lòng nhập tên khách hàng!");
     setIsAddingCus(true);
@@ -134,7 +132,6 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     
-    // BỌC THÉP VALIDATION KHÁCH HÀNG: Phải chọn từ CSDL
     if (customerSearch.trim() && !selectedCustomerId) {
       alert("⚠️ Khách hàng này chưa có trong hệ thống! Vui lòng bấm 'Thêm nhanh' để lưu khách vào CSDL trước khi tạo đơn.");
       return;
@@ -166,8 +163,6 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
       });
       
       alert(`✅ XUẤT ĐƠN VÀ TRỪ KHO THÀNH CÔNG! Mã đơn: ${orderId}`);
-      
-      // Chuyển hướng sang trang Đơn hàng để xem kết quả (Ép làm mới trình duyệt)
       window.location.href = "/orders"; 
 
     } catch (error) {
@@ -176,13 +171,18 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-100 text-sm">
-      <div className="w-[65%] flex flex-col p-4 gap-4">
+    // 🔥 BỌC THÉP RESPONSIVE: Dùng flex-col cho mobile (xếp chồng), lg:flex-row cho máy tính (trái-phải)
+    <div className="flex flex-col lg:flex-row w-full min-h-full bg-gray-100 text-sm lg:overflow-hidden pb-10 lg:pb-0">
+      
+      {/* ================= CỘT TRÁI (TÌM KIẾM & BẢNG) ================= */}
+      {/* Mobile: Rộng 100% (w-full). PC: Rộng 65% (lg:w-[65%]) */}
+      <div className="w-full lg:w-[65%] flex flex-col p-3 lg:p-4 gap-4 flex-none lg:h-full lg:overflow-hidden">
+        
         {/* Ô TÌM SẢN PHẨM / QUÉT MÃ VẠCH */}
-        <div className="relative" ref={searchProductRef}>
-          <div className="flex items-center bg-white rounded-xl shadow-sm border border-gray-200 px-4 py-3">
-            <Search className="w-6 h-6 text-blue-500 mr-3" />
-            <input type="text" autoFocus placeholder="Quét mã vạch hoặc nhập tên thiết bị điện tử..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setShowProductSuggestions(true); }} onFocus={() => setShowProductSuggestions(true)} className="flex-1 text-lg outline-none font-medium text-gray-800 bg-transparent" />
+        <div className="relative shrink-0" ref={searchProductRef}>
+          <div className="flex items-center bg-white rounded-xl shadow-sm border border-gray-200 px-4 py-3 focus-within:border-blue-500 transition-colors">
+            <Search className="w-5 h-5 lg:w-6 lg:h-6 text-blue-500 mr-3" />
+            <input type="text" autoFocus placeholder="Quét mã vạch hoặc nhập tên thiết bị..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setShowProductSuggestions(true); }} onFocus={() => setShowProductSuggestions(true)} className="flex-1 text-base lg:text-lg outline-none font-medium text-gray-800 bg-transparent" />
           </div>
           {showProductSuggestions && searchTerm && productSuggestions.length > 0 && (
             <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-2xl border max-h-80 overflow-y-auto divide-y">
@@ -197,9 +197,11 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
         </div>
 
         {/* BẢNG GIỎ HÀNG */}
-        <div className="flex-1 bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col">
-          <div className="overflow-x-auto flex-1">
-            <table className="w-full text-left">
+        {/* Mobile: Tạo min-height để cái khung ko bị dẹp nếu ko có SP. Cấm vỡ layout */}
+        <div className="flex-1 bg-white rounded-xl shadow-sm border flex flex-col min-h-[400px] lg:min-h-0 overflow-hidden">
+          <div className="overflow-x-auto flex-1 custom-scrollbar">
+            {/* 🔥 BỌC THÉP: min-w-[650px] để bắt buộc vuốt ngang trên đt, chống ép chữ */}
+            <table className="w-full text-left min-w-[650px]">
               <thead className="bg-blue-50/50 border-b font-semibold sticky top-0 z-10 text-gray-700">
                 <tr>
                   <th className="p-3 w-12 text-center">STT</th>
@@ -233,13 +235,13 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
                       <td className="p-3 text-right font-medium text-gray-600">{item.product.price_sell?.toLocaleString()}</td>
                       <td className="p-3">
                         <div className="flex items-center justify-center gap-1 border rounded p-0.5 w-fit mx-auto bg-white">
-                          <button onClick={() => setCart(prev => prev.map(i => i.product.id === item.product.id && i.quantity > 1 ? { ...i, quantity: i.quantity - 1 } : i))} className="p-1 hover:bg-gray-100 rounded"><Minus className="w-3 h-3" /></button>
-                          <span className="font-bold px-2 text-xs">{item.quantity}</span>
-                          <button onClick={() => setCart(prev => prev.map(i => i.product.id === item.product.id && i.quantity < item.product.stock ? { ...i, quantity: i.quantity + 1 } : i))} className="p-1 hover:bg-gray-100 rounded"><Plus className="w-3 h-3" /></button>
+                          <button onClick={() => setCart(prev => prev.map(i => i.product.id === item.product.id && i.quantity > 1 ? { ...i, quantity: i.quantity - 1 } : i))} className="p-1 hover:bg-gray-100 rounded text-gray-600"><Minus className="w-3 h-3" /></button>
+                          <span className="font-bold px-2 text-xs w-6 text-center">{item.quantity}</span>
+                          <button onClick={() => setCart(prev => prev.map(i => i.product.id === item.product.id && i.quantity < item.product.stock ? { ...i, quantity: i.quantity + 1 } : i))} className="p-1 hover:bg-gray-100 rounded text-gray-600"><Plus className="w-3 h-3" /></button>
                         </div>
                       </td>
                       <td className="p-3 text-right font-bold text-blue-600 font-mono">{(item.product.price_sell * item.quantity).toLocaleString()} đ</td>
-                      <td className="p-3 text-center"><button onClick={() => setCart(prev => prev.filter(i => i.product.id !== item.product.id))} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button></td>
+                      <td className="p-3 text-center"><button onClick={() => setCart(prev => prev.filter(i => i.product.id !== item.product.id))} className="text-gray-300 hover:text-red-500 lg:opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button></td>
                     </tr>
                   ))
                 )}
@@ -249,24 +251,24 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
         </div>
       </div>
 
-      {/* CỘT TÍNH TIỀN BÊN PHẢI */}
-      <div className="w-[35%] bg-white border-l shadow-xl flex flex-col">
-        <div className="p-4 bg-blue-600 text-white font-bold text-base flex items-center gap-2"><Receipt className="w-5 h-5" />Thông Tin Đơn</div>
+      {/* ================= CỘT PHẢI (THANH TOÁN) ================= */}
+      {/* Mobile: Tự động đẩy xuống dưới (mt-2). PC: Đứng bên phải (lg:border-l, lg:w-[35%]) */}
+      <div className="w-full lg:w-[35%] bg-white border-t lg:border-t-0 lg:border-l border-gray-200 shadow-xl flex flex-col flex-none lg:h-full mt-2 lg:mt-0 lg:overflow-y-auto">
+        <div className="p-4 bg-blue-600 text-white font-bold text-base flex items-center gap-2 shrink-0"><Receipt className="w-5 h-5" />Thông Tin Đơn</div>
         
-        <div className="p-4 border-b bg-gray-50/50 space-y-3">
+        <div className="p-4 border-b bg-gray-50/50 space-y-3 shrink-0">
           
-          {/* Ô TÌM KHÁCH HÀNG AUTOCOMPLETE BỌC THÉP */}
           <div className="relative" ref={searchCustomerRef}>
             <div className="bg-white border border-gray-300 rounded px-3 py-2 flex items-center focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 transition-colors shadow-sm">
-              <User className="w-4 h-4 text-gray-400 mr-2" />
+              <User className="w-4 h-4 text-gray-400 mr-2 shrink-0" />
               <input 
                 type="text" 
-                placeholder="Tìm khách... (Để trống = Khách vãng lai)" 
+                placeholder="Tìm khách... (Bỏ trống = Khách vãng lai)" 
                 value={customerSearch} 
                 onChange={(e) => { 
                   setCustomerSearch(e.target.value); 
                   setShowCustomerSuggestions(true); 
-                  setSelectedCustomerId(null); // Gõ chữ là mất ID, bắt buộc chọn lại hoặc thêm mới
+                  setSelectedCustomerId(null); 
                   setCustomerPhone(""); 
                 }} 
                 onFocus={() => setShowCustomerSuggestions(true)}
@@ -298,7 +300,6 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
                   )}
                 </div>
 
-                {/* NÚT THÊM NHANH LUÔN HIỆN Ở DƯỚI NẾU CHƯA CHỌN */}
                 {customerSearch && !selectedCustomerId && (
                   <div 
                     onClick={() => {
@@ -319,11 +320,10 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
           </div>
 
           <div className="bg-gray-100 border border-gray-200 rounded px-3 py-2 flex items-center shadow-inner">
-            <span className="text-xs text-gray-400 mr-2">☎</span>
+            <span className="text-xs text-gray-400 mr-2 shrink-0">☎</span>
             <input type="text" placeholder="Số điện thoại (Tự động điền)..." readOnly value={customerPhone} className="w-full bg-transparent outline-none font-medium text-gray-500 cursor-not-allowed" />
           </div>
           
-          {/* KHỐI THỜI GIAN VÀ GHI CHÚ */}
           <div className="space-y-3 mt-4 pt-3 border-t border-gray-200">
             <div>
               <label className="text-[10px] font-bold text-gray-500 block mb-1.5 uppercase tracking-wider">Thời gian tạo đơn</label>
@@ -336,26 +336,32 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
           </div>
         </div>
 
-        <div className="p-4 border-b text-xs grid grid-cols-2 gap-3">
+        <div className="p-4 border-b text-xs grid grid-cols-2 gap-3 shrink-0">
           <div><label className="font-semibold text-gray-500 block mb-1">Hình thức</label><select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="w-full border rounded p-1.5 outline-none bg-gray-50"><option value="Tiền mặt">Tiền mặt</option><option value="Chuyển khoản">Chuyển khoản</option></select></div>
           <div><label className="font-semibold text-gray-500 block mb-1">Trạng thái</label><select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className="w-full border rounded p-1.5 font-bold outline-none bg-gray-50 text-blue-700"><option value="Đã thanh toán">Đã thanh toán đủ</option><option value="Chưa thanh toán">Ghi nợ / Đặt cọc</option></select></div>
         </div>
         
-        <div className="p-4 flex-1 space-y-3 font-medium text-gray-700">
+        <div className="p-4 flex-1 space-y-3 font-medium text-gray-700 min-h-[220px]">
           <div className="flex justify-between"><span>Tổng tiền hàng:</span><span>{totalGoodsAmount.toLocaleString()} đ</span></div>
           <div className="flex justify-between items-center"><span>Chiết khấu giảm giá:</span><input type="text" value={discount === 0 ? "" : discount.toLocaleString()} onChange={(e) => setDiscount(Number(e.target.value.replace(/[^0-9]/g, '')) || 0)} className="w-24 text-right border-b outline-none text-red-500 font-bold" placeholder="0" /></div>
           <div className="h-px bg-gray-200"></div>
           <div className="flex justify-between items-end"><span className="font-bold text-gray-900 text-base">Khách Cần Trả:</span><span className="text-2xl font-black text-blue-600">{finalAmount.toLocaleString()} đ</span></div>
-          <div className={`p-3 rounded-xl border space-y-2 ${paymentStatus === 'Đã thanh toán' ? 'bg-blue-50/50' : 'bg-amber-50/40'}`}>
-            <div className="flex justify-between items-center"><span className="font-bold text-gray-700">{paymentStatus === 'Đã thanh toán' ? 'Khách đưa:' : 'Khách cọc:'}</span><input type="text" value={amountGiven === 0 ? "" : amountGiven.toLocaleString()} onChange={(e) => setAmountGiven(Number(e.target.value.replace(/[^0-9]/g, '')) || 0)} className="w-28 text-right font-bold text-base border-b bg-transparent outline-none" /></div>
+          <div className={`p-3 rounded-xl border space-y-2 ${paymentStatus === 'Đã thanh toán' ? 'bg-blue-50/50 border-blue-100' : 'bg-amber-50/40 border-amber-100'}`}>
+            <div className="flex justify-between items-center"><span className="font-bold text-gray-700">{paymentStatus === 'Đã thanh toán' ? 'Khách đưa:' : 'Khách cọc:'}</span><input type="text" value={amountGiven === 0 ? "" : amountGiven.toLocaleString()} onChange={(e) => setAmountGiven(Number(e.target.value.replace(/[^0-9]/g, '')) || 0)} className="w-28 text-right font-bold text-base border-b bg-transparent outline-none focus:border-blue-400 transition-colors" /></div>
             <div className="flex justify-between text-xs text-gray-500"><span>{paymentStatus === 'Đã thanh toán' ? 'Tiền thừa trả khách:' : 'Tiền khách nợ lại:'}</span><span className="font-bold">{paymentStatus === 'Đã thanh toán' ? (amountGiven - finalAmount > 0 ? (amountGiven - finalAmount).toLocaleString() : 0) : (finalAmount - amountGiven > 0 ? (finalAmount - amountGiven).toLocaleString() : 0)} đ</span></div>
           </div>
         </div>
         
-        <div className="p-4 bg-gray-50 border-t"><button id="btn-checkout" onClick={handleCheckout} disabled={cart.length === 0 || isSubmitting || (paymentStatus === 'Đã thanh toán' && amountGiven < finalAmount)} className={`w-full py-3.5 rounded-xl font-bold text-white shadow-md flex items-center justify-center gap-2 ${cart.length === 0 || (paymentStatus === 'Đã thanh toán' && amountGiven < finalAmount) ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-blue-600 hover:bg-blue-700'}`}>{isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Receipt className="w-5 h-5" />}{paymentStatus === 'Đã thanh toán' && amountGiven < finalAmount ? "KHÁCH ĐƯA THIẾU TIỀN" : "TẠO HÓA ĐƠN (F9)"}</button></div>
+        {/* Nút Tạo Đơn - Đã thêm dính đáy trên mobile */}
+        <div className="p-4 bg-gray-50 border-t sticky bottom-0 z-20 shrink-0">
+          <button id="btn-checkout" onClick={handleCheckout} disabled={cart.length === 0 || isSubmitting || (paymentStatus === 'Đã thanh toán' && amountGiven < finalAmount)} className={`w-full py-3.5 rounded-xl font-bold text-white shadow-md flex items-center justify-center gap-2 transition-all ${cart.length === 0 || (paymentStatus === 'Đã thanh toán' && amountGiven < finalAmount) ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-blue-600 hover:bg-blue-700 active:scale-[0.98]'}`}>
+            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Receipt className="w-5 h-5" />}
+            {paymentStatus === 'Đã thanh toán' && amountGiven < finalAmount ? "KHÁCH ĐƯA THIẾU TIỀN" : "TẠO HÓA ĐƠN (F9)"}
+          </button>
+        </div>
       </div>
 
-      {/* POPUP THÊM NHANH KHÁCH HÀNG (Full Địa chỉ & Ghi chú) */}
+      {/* POPUP THÊM NHANH KHÁCH HÀNG */}
       {showAddModal && (
         <div className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-100">
