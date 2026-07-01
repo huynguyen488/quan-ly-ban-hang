@@ -24,7 +24,7 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
   const [paymentMethod, setPaymentMethod] = useState("Tiền mặt");
   const [paymentStatus, setPaymentStatus] = useState("Đã thanh toán");
   const [orderDate, setOrderDate] = useState("");
-  const [orderNote, setOrderNote] = useState(""); // 🔥 Thêm state ghi chú
+  const [orderNote, setOrderNote] = useState(""); 
 
   const [productSearch, setProductSearch] = useState("");
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
@@ -33,6 +33,18 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [adminUser, setAdminUser] = useState("");
   const [adminPass, setAdminPass] = useState("");
+
+  // 🔥 HÀM BỌC THÉP: Giúp JS đọc hiểu mọi định dạng ngày (tránh lỗi tàng hình đơn hàng)
+  const parseSafeDate = (dateStr: string) => {
+    if (!dateStr) return new Date();
+    let d = new Date(dateStr);
+    if (isNaN(d.getTime())) {
+      // Nếu lỗi, cố bóc tách định dạng Việt Nam (DD/MM/YYYY)
+      const parts = dateStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if (parts) d = new Date(`${parts[3]}-${parts[2]}-${parts[1]}T12:00:00`);
+    }
+    return isNaN(d.getTime()) ? new Date() : d;
+  };
 
   const checkIsPaid = (status: any) => {
     if (!status) return false;
@@ -55,7 +67,7 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
 
   const filterByTime = (dateStr: string) => {
     if (!dateStr) return true;
-    const itemDate = new Date(dateStr);
+    const itemDate = parseSafeDate(dateStr);
     const now = new Date();
     
     if (timeFilter === "Hôm nay") return itemDate.toDateString() === now.toDateString();
@@ -120,9 +132,12 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
     setCustomerSearch(order.customer_name === "Khách vãng lai" ? "" : order.customer_name || "");
     setCustomerPhone(order.customer_phone || "");
     setPaymentMethod(order.payment_method || "Tiền mặt");
-    setOrderDate(order.date || new Date().toLocaleString('vi-VN'));
     
-    // 🔥 Bóc tách ghi chú tay của khách khỏi ghi chú tự động của hệ thống
+    // 🔥 Convert ngày giờ sang chuẩn datetime-local (để bật lịch lên)
+    const d = parseSafeDate(order.date);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    setOrderDate(d.toISOString().slice(0, 16));
+    
     const rawNote = order.note || "";
     const cleanNote = rawNote.split('| Đã sửa đơn')[0].split('| Khách đưa')[0].trim();
     setOrderNote(cleanNote);
@@ -194,7 +209,9 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
 
     setIsActionLoading(true);
     try {
-      // 🔥 Bọc thép truyền thêm orderNote
+      // 🔥 Format lại ngày để lưu xuống DB đẹp mắt
+      const finalDateStr = orderDate ? new Date(orderDate).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN');
+
       await updateOrderComplete(selectedOrder.id, { 
         cart, 
         customerName: finalCustomerName, 
@@ -204,7 +221,7 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
         paymentMethod, 
         status: paymentStatus, 
         amountGiven, 
-        orderDate, 
+        orderDate: finalDateStr, 
         note: orderNote 
       });
       alert(`✅ Đã cập nhật chỉnh sửa và cân đối kho thành công!`);
@@ -327,7 +344,8 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
                 filteredOrders.map((order) => {
                   const isPaid = checkIsPaid(order.status);
                   const isCancelled = checkIsCancelled(order.status);
-                  const d = new Date(order.date);
+                  // 🔥 Cập nhật hiển thị bằng hàm parse an toàn
+                  const d = parseSafeDate(order.date);
 
                   return (
                     <tr key={order.id} className={`transition-colors duration-150 ${isCancelled ? 'bg-gray-50/80 opacity-60' : 'hover:bg-gray-50/80'}`}>
@@ -508,9 +526,10 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
                   <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Thời gian & Ghi chú</h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[10px] font-bold text-gray-500 block mb-1.5 uppercase">Thời gian (HH:MM DD/MM/YYYY)</label>
+                      <label className="text-[10px] font-bold text-gray-500 block mb-1.5 uppercase">Thời gian tạo đơn</label>
+                      {/* 🔥 Sửa type thành datetime-local để hiện lịch */}
                       <input 
-                        type="text" 
+                        type="datetime-local" 
                         disabled={isSelectedOrderCancelled}
                         value={orderDate} 
                         onChange={(e) => setOrderDate(e.target.value)} 
