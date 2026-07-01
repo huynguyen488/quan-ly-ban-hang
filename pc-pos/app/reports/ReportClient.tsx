@@ -374,7 +374,7 @@ export default function ReportClient({ initialOrders, initialReceipts, initialPr
                       dataKey="rev"
                       nameKey="name"
                       label={({ name, percent }: any) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                      labelStyle={{ fontSize: '11px', fontWeight: 'bold', fill: '#334155' }}
+                     
                     >
                       {reportData.paymentMethods.map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
