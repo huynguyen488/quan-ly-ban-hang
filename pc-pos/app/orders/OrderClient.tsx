@@ -55,7 +55,7 @@ const checkIsCancelled = (status: any) => {
   };
 
   const filterByTime = (dateStr: string) => {
-    if (!dateStr) return false;
+    if (!dateStr) return true;
     const itemDate = new Date(dateStr);
     const now = new Date();
     
@@ -125,6 +125,7 @@ const totalDebt = useMemo(() => {
     setCustomerSearch(order.customer_name === "Khách vãng lai" ? "" : order.customer_name || "");
     setCustomerPhone(order.customer_phone || "");
     setPaymentMethod(order.payment_method || "Tiền mặt");
+    setOrderDate(order.date || new Date().toLocaleString('vi-VN'));
 const isCancelled = checkIsCancelled(order.status);
     setPaymentStatus(isCancelled ? "Đã hủy" : (checkIsPaid(order.status) ? "Đã thanh toán" : "Chưa thanh toán"));
     
