@@ -34,15 +34,36 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
   const [adminUser, setAdminUser] = useState("");
   const [adminPass, setAdminPass] = useState("");
 
-  // 🔥 HÀM BỌC THÉP: Giúp JS đọc hiểu mọi định dạng ngày (tránh lỗi tàng hình đơn hàng)
+ // 🔥 HÀM BỌC THÉP MỚI: Bóc tách chính xác cả NGÀY và GIỜ
   const parseSafeDate = (dateStr: string) => {
     if (!dateStr) return new Date();
+    
+    // Thử dịch theo chuẩn quốc tế trước
     let d = new Date(dateStr);
-    if (isNaN(d.getTime())) {
-      // Nếu lỗi, cố bóc tách định dạng Việt Nam (DD/MM/YYYY)
-      const parts = dateStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-      if (parts) d = new Date(`${parts[3]}-${parts[2]}-${parts[1]}T12:00:00`);
+    if (!isNaN(d.getTime())) return d;
+
+    // Nếu là chuẩn Việt Nam (VD: 15:30:00 01/07/2026), tự động bóc tách từng số
+    const dateMatch = dateStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    const timeMatch = dateStr.match(/(\d{1,2}):(\d{1,2})/);
+
+    if (dateMatch) {
+      const year = dateMatch[3];
+      const month = dateMatch[2].padStart(2, '0');
+      const day = dateMatch[1].padStart(2, '0');
+      
+      let hours = "00";
+      let minutes = "00";
+      
+      // Bắt chính xác giờ phút sếp đã lưu
+      if (timeMatch) {
+        hours = timeMatch[1].padStart(2, '0');
+        minutes = timeMatch[2].padStart(2, '0');
+      }
+      
+      // Ghép lại thành chuẩn ISO để hệ thống thấu hiểu
+      d = new Date(`${year}-${month}-${day}T${hours}:${minutes}:00`);
     }
+    
     return isNaN(d.getTime()) ? new Date() : d;
   };
 
@@ -84,22 +105,28 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
     return true; 
   };
 
-  const filteredOrders = initialOrders.filter((order) => {
-    const matchesSearch = 
-      order.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer_phone?.includes(searchTerm) ||
-      order.items?.some((item: any) => item.product_name?.toLowerCase().includes(searchTerm.toLowerCase()));
+// LỌC VÀ SẮP XẾP LẠI THEO THỜI GIAN MỚI NHẤT
+  const filteredOrders = useMemo(() => {
+    return initialOrders.filter((order) => {
+      const matchesSearch = 
+        order.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customer_phone?.includes(searchTerm) ||
+        order.items?.some((item: any) => item.product_name?.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    if (!matchesSearch) return false;
-    if (!filterByTime(order.date)) return false;
+      if (!matchesSearch) return false;
+      if (!filterByTime(order.date)) return false;
 
-    const statusKey = getStatusKey(order.status);
-    if (statusFilter === "paid" && statusKey !== "paid") return false;
-    if (statusFilter === "debt" && statusKey !== "debt") return false;
-    if (statusFilter === "cancelled" && statusKey !== "cancelled") return false;
-    return true;
-  });
+      const statusKey = getStatusKey(order.status);
+      if (statusFilter === "paid" && statusKey !== "paid") return false;
+      if (statusFilter === "debt" && statusKey !== "debt") return false;
+      if (statusFilter === "cancelled" && statusKey !== "cancelled") return false;
+      return true;
+    }).sort((a, b) => {
+      // 🔥 ĐOẠN NÀY ĐẢM BẢO ĐƠN MỚI NHẤT LUÔN NẰM TRÊN ĐẦU
+      return parseSafeDate(b.date).getTime() - parseSafeDate(a.date).getTime();
+    });
+  }, [initialOrders, searchTerm, timeFilter, statusFilter]); // Đã bọc trong useMemo cho mượt
 
   const totalRevenue = filteredOrders.reduce((sum, o) => sum + (checkIsCancelled(o.status) ? 0 : (o.total_price || 0)), 0);
   
