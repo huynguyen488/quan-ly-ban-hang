@@ -65,10 +65,10 @@ export async function createOrder(orderData: any) {
 
     // GHI LỊCH SỬ KHO (Giống hệt app Flutter cũ của sếp)
     try {
-      await db.execute(sql`
-        INSERT INTO stock_history (product_name, change_amount, new_balance, type, note, date)
-        VALUES (${item.product.name}, ${-item.quantity}, ${newStock}, 'Xuất kho', ${`Bán đơn #${orderId}`}, ${orderDate})
-      `);
+await db.run(sql`
+  INSERT INTO stock_history (product_name, change_amount, new_balance, type, note, date)
+  VALUES (${item.product.name}, ${-item.quantity}, ${newStock}, 'Xuất kho', ${`Bán đơn...`}
+`);
     } catch (e) {
       console.log("Chưa chạy migration bảng stock_history nhưng đơn vẫn lưu tốt sếp nhé!");
     }
