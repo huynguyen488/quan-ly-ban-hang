@@ -10,7 +10,7 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
 
   const [searchTerm, setSearchTerm] = useState("");
   const [timeFilter, setTimeFilter] = useState("Tháng này");
-  const [statusFilter, setStatusFilter] = useState("all"); // all, paid, debt, cancelled
+  const [statusFilter, setStatusFilter] = useState("all"); 
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [cart, setCart] = useState<any[]>([]); 
@@ -24,6 +24,7 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
   const [paymentMethod, setPaymentMethod] = useState("Tiền mặt");
   const [paymentStatus, setPaymentStatus] = useState("Đã thanh toán");
   const [orderDate, setOrderDate] = useState("");
+  const [orderNote, setOrderNote] = useState(""); // 🔥 Thêm state ghi chú
 
   const [productSearch, setProductSearch] = useState("");
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
@@ -40,14 +41,12 @@ export default function OrderClient({ initialOrders, initialProducts = [] }: { i
     return (s === '1' || s === 'true' || s === 'paid' || s === 'success' || s.includes('hoàn thành') || s.includes('đã thanh toán') || s.includes('đủ'));
   };
 
-// Sửa lại hàm này trong OrderClient.tsx
-const checkIsCancelled = (status: any) => {
-  if (!status) return false;
-  // Loại bỏ dấu, khoảng trắng, chuyển về chữ thường để so sánh chính xác tuyệt đối
-  const s = String(status).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  // Quét các từ khóa: huy, cancel
-  return s.includes("huy") || s.includes("cancel");
-};
+  const checkIsCancelled = (status: any) => {
+    if (!status) return false;
+    const s = String(status).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return s.includes("huy") || s.includes("cancel");
+  };
+  
   const getStatusKey = (status: any) => {
     if (checkIsCancelled(status)) return 'cancelled';
     if (checkIsPaid(status)) return 'paid';
@@ -73,7 +72,6 @@ const checkIsCancelled = (status: any) => {
     return true; 
   };
 
-  // LỌC THEO CẢ 3 TIÊU CHÍ: tìm kiếm, thời gian, trạng thái
   const filteredOrders = initialOrders.filter((order) => {
     const matchesSearch = 
       order.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -84,7 +82,6 @@ const checkIsCancelled = (status: any) => {
     if (!matchesSearch) return false;
     if (!filterByTime(order.date)) return false;
 
-    // Lọc theo trạng thái
     const statusKey = getStatusKey(order.status);
     if (statusFilter === "paid" && statusKey !== "paid") return false;
     if (statusFilter === "debt" && statusKey !== "debt") return false;
@@ -93,19 +90,17 @@ const checkIsCancelled = (status: any) => {
   });
 
   const totalRevenue = filteredOrders.reduce((sum, o) => sum + (checkIsCancelled(o.status) ? 0 : (o.total_price || 0)), 0);
-  // Sửa lại phần tính totalDebt trong useMemo
-const totalDebt = useMemo(() => {
-  return filteredOrders.reduce((sum, o) => {
-    const isPaid = checkIsPaid(o.status);
-    const isCancelled = checkIsCancelled(o.status);
-    
-    // 🔥 Chỉ cộng nếu đơn hàng ĐÃ HOẠT ĐỘNG và CHƯA THANH TOÁN
-    if (!isCancelled && !isPaid) {
-      return sum + (o.total_price || 0);
-    }
-    return sum;
-  }, 0);
-}, [filteredOrders]);
+  
+  const totalDebt = useMemo(() => {
+    return filteredOrders.reduce((sum, o) => {
+      const isPaid = checkIsPaid(o.status);
+      const isCancelled = checkIsCancelled(o.status);
+      if (!isCancelled && !isPaid) {
+        return sum + (o.total_price || 0);
+      }
+      return sum;
+    }, 0);
+  }, [filteredOrders]);
 
   const productSuggestions = initialProducts.filter((product: any) =>
     product.name?.toLowerCase().includes(productSearch.toLowerCase()) ||
@@ -126,7 +121,13 @@ const totalDebt = useMemo(() => {
     setCustomerPhone(order.customer_phone || "");
     setPaymentMethod(order.payment_method || "Tiền mặt");
     setOrderDate(order.date || new Date().toLocaleString('vi-VN'));
-const isCancelled = checkIsCancelled(order.status);
+    
+    // 🔥 Bóc tách ghi chú tay của khách khỏi ghi chú tự động của hệ thống
+    const rawNote = order.note || "";
+    const cleanNote = rawNote.split('| Đã sửa đơn')[0].split('| Khách đưa')[0].trim();
+    setOrderNote(cleanNote);
+
+    const isCancelled = checkIsCancelled(order.status);
     setPaymentStatus(isCancelled ? "Đã hủy" : (checkIsPaid(order.status) ? "Đã thanh toán" : "Chưa thanh toán"));
     
     const noteStr = order.note || "";
@@ -146,7 +147,7 @@ const isCancelled = checkIsCancelled(order.status);
     setIsOpen(true);
   };
 
-  const handleCloseDetail = () => { setIsOpen(false); setSelectedOrder(null); setCart([]); setProductSearch(""); };
+  const handleCloseDetail = () => { setIsOpen(false); setSelectedOrder(null); setCart([]); setProductSearch(""); setOrderNote(""); };
 
   const handleAddProductToEditCart = (product: any) => {
     setCart((prevCart) => {
@@ -193,7 +194,19 @@ const isCancelled = checkIsCancelled(order.status);
 
     setIsActionLoading(true);
     try {
-      await updateOrderComplete(selectedOrder.id, { cart, customerName: finalCustomerName, customerPhone, totalPrice: finalAmount, discount, paymentMethod, status: paymentStatus, amountGiven, orderDate });
+      // 🔥 Bọc thép truyền thêm orderNote
+      await updateOrderComplete(selectedOrder.id, { 
+        cart, 
+        customerName: finalCustomerName, 
+        customerPhone, 
+        totalPrice: finalAmount, 
+        discount, 
+        paymentMethod, 
+        status: paymentStatus, 
+        amountGiven, 
+        orderDate, 
+        note: orderNote 
+      });
       alert(`✅ Đã cập nhật chỉnh sửa và cân đối kho thành công!`);
       handleCloseDetail();
     } catch (error) { alert("Lỗi khi cập nhật!"); } finally { setIsActionLoading(false); }
@@ -246,7 +259,6 @@ const isCancelled = checkIsCancelled(order.status);
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
-          {/* 🔥 BỘ LỌC TRẠNG THÁI MỚI */}
           <div className="relative">
             <select
               value={statusFilter}
@@ -296,7 +308,7 @@ const isCancelled = checkIsCancelled(order.status);
         </div>
       </div>
 
-      {/* BẢNG DỮ LIỆU ĐƠN HÀNG - TĂNG CỠ CHỮ */}
+      {/* BẢNG DỮ LIỆU ĐƠN HÀNG */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col print:border-none print:shadow-none">
         <div className="overflow-x-auto flex-1 custom-scrollbar">
           <table className="w-full text-left text-sm text-gray-700 border-collapse min-w-[800px]">
@@ -395,7 +407,7 @@ const isCancelled = checkIsCancelled(order.status);
         </div>
       </div>
 
-      {/* ================= POPUP: CHI TIẾT & SỬA ĐƠN (giữ nguyên) ================= */}
+      {/* ================= POPUP: CHI TIẾT & SỬA ĐƠN ================= */}
       {isOpen && selectedOrder && (
         <div className="fixed inset-0 bg-gray-900/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm print:bg-white print:p-0">
           <div className="bg-white rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col h-[90vh] text-left overflow-hidden animate-in zoom-in-95 duration-200 print:shadow-none print:w-full print:max-w-none print:h-auto print:border-none">
@@ -415,7 +427,7 @@ const isCancelled = checkIsCancelled(order.status);
             </div>
 
             <div className="flex-1 overflow-hidden flex flex-col md:flex-row bg-white print:block">
-              {/* CỘT TRÁI (60%) */}
+              {/* CỘT TRÁI */}
               <div className="w-full md:w-[60%] p-5 flex flex-col gap-4 h-full border-r border-gray-200 bg-gray-50/50 print:w-full print:border-none print:h-auto">
                 {!isSelectedOrderCancelled && (
                   <div className="relative print:hidden" ref={searchProductRef}>
@@ -476,7 +488,7 @@ const isCancelled = checkIsCancelled(order.status);
                 </div>
               </div>
 
-              {/* CỘT PHẢI (40%) - giữ nguyên */}
+              {/* CỘT PHẢI (40%) */}
               <div className="w-full md:w-[40%] p-5 flex flex-col gap-4 h-full overflow-y-auto custom-scrollbar print:w-full print:h-auto print:overflow-visible">
                 
                 <div className="space-y-2 bg-white p-4 rounded-xl border border-gray-200 shadow-sm print:border-none print:p-0 print:shadow-none">
@@ -488,6 +500,33 @@ const isCancelled = checkIsCancelled(order.status);
                   <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200 px-3 py-2 focus-within:border-blue-400 transition-colors print:border-none print:bg-transparent print:p-0 print:mt-1">
                     <span className="text-[10px] font-black text-gray-400 mr-2.5 print:hidden">☎</span>
                     <input type="text" placeholder="Số điện thoại..." value={customerPhone} disabled={isSelectedOrderCancelled} onChange={(e) => setCustomerPhone(e.target.value)} className="flex-1 outline-none text-xs font-semibold bg-transparent text-gray-800 font-mono disabled:text-gray-600" />
+                  </div>
+                </div>
+
+                {/* 🔥 KHỐI THỜI GIAN VÀ GHI CHÚ */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3 print:hidden">
+                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Thời gian & Ghi chú</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-500 block mb-1.5 uppercase">Thời gian (HH:MM DD/MM/YYYY)</label>
+                      <input 
+                        type="text" 
+                        disabled={isSelectedOrderCancelled}
+                        value={orderDate} 
+                        onChange={(e) => setOrderDate(e.target.value)} 
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500 transition-colors bg-gray-50 disabled:opacity-70"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-500 block mb-1.5 uppercase">Ghi chú</label>
+                      <textarea 
+                        disabled={isSelectedOrderCancelled}
+                        placeholder="Nhập ghi chú đơn hàng..." 
+                        value={orderNote} 
+                        onChange={(e) => setOrderNote(e.target.value)} 
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-blue-500 transition-colors min-h-[60px] bg-gray-50 disabled:opacity-70 custom-scrollbar"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -503,21 +542,20 @@ const isCancelled = checkIsCancelled(order.status);
                     </div>
                     <div>
                       <label className="text-[10px] font-bold text-gray-500 block mb-1.5 uppercase tracking-wider">Trạng thái</label>
-<select 
-  value={paymentStatus} 
-  disabled={isSelectedOrderCancelled} 
-  onChange={(e) => setPaymentStatus(e.target.value)} 
-  className={`w-full border rounded-lg px-2.5 py-2 font-bold text-xs outline-none cursor-pointer transition-colors disabled:opacity-70 disabled:cursor-not-allowed ${
-    paymentStatus === 'Đã thanh toán' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-    : paymentStatus === 'Đã hủy' ? 'bg-gray-100 text-gray-600 border-gray-200' 
-    : 'bg-rose-50 text-rose-700 border-rose-200'
-  }`}
->
-  {/* 🔥 Thêm Option Đã Hủy cho các đơn bị hủy */}
-  {isSelectedOrderCancelled && <option value="Đã hủy">Đã Hủy Đơn</option>}
-  <option value="Đã thanh toán">Đã Thu Đủ</option>
-  <option value="Chưa thanh toán">Ghi Nợ</option>
-</select>
+                      <select 
+                        value={paymentStatus} 
+                        disabled={isSelectedOrderCancelled} 
+                        onChange={(e) => setPaymentStatus(e.target.value)} 
+                        className={`w-full border rounded-lg px-2.5 py-2 font-bold text-xs outline-none cursor-pointer transition-colors disabled:opacity-70 disabled:cursor-not-allowed ${
+                          paymentStatus === 'Đã thanh toán' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                          : paymentStatus === 'Đã hủy' ? 'bg-gray-100 text-gray-600 border-gray-200' 
+                          : 'bg-rose-50 text-rose-700 border-rose-200'
+                        }`}
+                      >
+                        {isSelectedOrderCancelled && <option value="Đã hủy">Đã Hủy Đơn</option>}
+                        <option value="Đã thanh toán">Đã Thu Đủ</option>
+                        <option value="Chưa thanh toán">Ghi Nợ</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -539,35 +577,34 @@ const isCancelled = checkIsCancelled(order.status);
                     </div>
                   </div>
                   
-<div className={`mt-4 p-3.5 rounded-xl border transition-colors print:hidden ${isSelectedOrderCancelled ? 'bg-gray-50 border-gray-200' : paymentStatus === 'Đã thanh toán' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/30 border-rose-100'} space-y-2.5`}>
-  <div className="flex justify-between items-center">
-    <span className="font-bold text-gray-700">
-      {isSelectedOrderCancelled ? 'Khách đã đưa' : paymentStatus === 'Đã thanh toán' ? 'Khách đưa' : 'Khách đặt cọc'}
-    </span>
-    <div className="flex items-center bg-white border border-gray-300 rounded-lg px-2 py-1 w-28 shadow-sm focus-within:border-blue-400 transition-colors">
-      <input type="text" disabled={isSelectedOrderCancelled} value={amountGiven === 0 ? '' : amountGiven.toLocaleString()} onChange={(e) => setAmountGiven(Number(e.target.value.replace(/[^0-9]/g, '')) || 0)} className="w-full text-right outline-none font-bold text-sm bg-transparent disabled:text-gray-600" />
-      <span className="ml-1 font-semibold text-gray-400">₫</span>
-    </div>
-  </div>
-  
-  {/* 🔥 Giao diện 3 ngã rẽ: Đã Hủy / Đã Thu Đủ / Ghi Nợ */}
-  {isSelectedOrderCancelled ? (
-    <div className="flex justify-between items-center">
-      <span className="font-bold text-gray-500">Trạng thái công nợ</span>
-      <span className="font-black text-gray-400 text-base">Đã Triệt Tiêu</span>
-    </div>
-  ) : paymentStatus === 'Đã thanh toán' ? (
-    <div className="flex justify-between items-center">
-      <span className="font-medium text-gray-500">Tiền thừa trả khách</span>
-      <span className="font-bold text-gray-800">{changeAmount.toLocaleString()} ₫</span>
-    </div>
-  ) : (
-    <div className="flex justify-between items-center">
-      <span className="font-bold text-red-600">Còn nợ lại</span>
-      <span className="font-black text-red-600 text-base">{debtAmount.toLocaleString()} ₫</span>
-    </div>
-  )}
-</div>
+                  <div className={`mt-4 p-3.5 rounded-xl border transition-colors print:hidden ${isSelectedOrderCancelled ? 'bg-gray-50 border-gray-200' : paymentStatus === 'Đã thanh toán' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/30 border-rose-100'} space-y-2.5`}>
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-gray-700">
+                        {isSelectedOrderCancelled ? 'Khách đã đưa' : paymentStatus === 'Đã thanh toán' ? 'Khách đưa' : 'Khách đặt cọc'}
+                      </span>
+                      <div className="flex items-center bg-white border border-gray-300 rounded-lg px-2 py-1 w-28 shadow-sm focus-within:border-blue-400 transition-colors">
+                        <input type="text" disabled={isSelectedOrderCancelled} value={amountGiven === 0 ? '' : amountGiven.toLocaleString()} onChange={(e) => setAmountGiven(Number(e.target.value.replace(/[^0-9]/g, '')) || 0)} className="w-full text-right outline-none font-bold text-sm bg-transparent disabled:text-gray-600" />
+                        <span className="ml-1 font-semibold text-gray-400">₫</span>
+                      </div>
+                    </div>
+                    
+                    {isSelectedOrderCancelled ? (
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-gray-500">Trạng thái công nợ</span>
+                        <span className="font-black text-gray-400 text-base">Đã Triệt Tiêu</span>
+                      </div>
+                    ) : paymentStatus === 'Đã thanh toán' ? (
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-gray-500">Tiền thừa trả khách</span>
+                        <span className="font-bold text-gray-800">{changeAmount.toLocaleString()} ₫</span>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-red-600">Còn nợ lại</span>
+                        <span className="font-black text-red-600 text-base">{debtAmount.toLocaleString()} ₫</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
               </div>

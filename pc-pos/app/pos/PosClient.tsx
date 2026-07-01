@@ -8,7 +8,7 @@ import { quickAddCustomer, createOrder } from "./actions";
 interface CartItem {
   product: any;
   quantity: number;
-  serials: string; // Thêm biến lưu mã máy
+  serials: string; 
 }
 
 export default function PosClient({ initialProducts, initialCustomers }: { initialProducts: any[], initialCustomers: any[] }) {
@@ -29,6 +29,7 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
   const searchCustomerRef = useRef<HTMLDivElement>(null);
 
   const [currentDate, setCurrentDate] = useState("");
+  const [orderNote, setOrderNote] = useState(""); // 🔥 Thêm state Ghi chú
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -68,7 +69,6 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
     setShowProductSuggestions(false);
   };
 
-  // Hàm xử lý khi gõ/quét Serial vào món hàng điện tử
   const handleSerialChange = (productId: number, text: string) => {
     setCart(prev => prev.map(item => item.product.id === productId ? { ...item, serials: text } : item));
   };
@@ -93,6 +93,9 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
 
     setIsSubmitting(true);
     try {
+      // 🔥 Xử lý format ngày tháng cho đẹp trước khi lưu
+      const finalDate = currentDate ? new Date(currentDate).toLocaleString('vi-VN') : new Date().toLocaleString('vi-VN');
+
       const orderId = await createOrder({
         cart,
         customerName: finalCustomerName,
@@ -102,10 +105,16 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
         paymentMethod,
         status: paymentStatus,
         amountGiven,
-        orderDate: currentDate,
+        orderDate: finalDate, // Truyền ngày
+        note: orderNote,      // Truyền ghi chú
       });
       alert(`✅ XUẤT ĐƠN VÀ TRỪ KHO THÀNH CÔNG! Mã đơn: ${orderId}`);
-      setCart([]); setCustomerSearch(""); setCustomerPhone(""); setDiscount(0);
+      
+      // Xóa form sau khi lưu
+      setCart([]); setCustomerSearch(""); setCustomerPhone(""); setDiscount(0); setOrderNote("");
+      const now = new Date();
+      const tzOffset = now.getTimezoneOffset() * 60000;
+      setCurrentDate(new Date(now.getTime() - tzOffset).toISOString().slice(0, 16));
     } catch (error) {
       alert("❌ Lỗi lưu đơn!");
     } finally { setIsSubmitting(false); }
@@ -155,7 +164,6 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
                       <td className="p-3 text-center text-gray-400 font-medium">{index + 1}</td>
                       <td className="p-3">
                         <div className="font-bold text-gray-900 leading-tight">{item.product.name}</div>
-                        {/* Ô NHẬP SERIAL THÔNG MINH CHO CỬA HÀNG ĐIỆN TỬ */}
                         <div className="mt-1.5 flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded px-2 py-1 max-w-sm">
                           <QrCode className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                           <input 
@@ -186,13 +194,37 @@ export default function PosClient({ initialProducts, initialCustomers }: { initi
         </div>
       </div>
 
-      {/* CỘT TÍNH TIỀN BÊN PHẢI (GIỮ NGUYÊN NGHIỆP VỤ BÙ TRỪ TIỀN ĐÃ HOÀN THIỆN) */}
+      {/* CỘT TÍNH TIỀN BÊN PHẢI */}
       <div className="w-[35%] bg-white border-l shadow-xl flex flex-col">
         <div className="p-4 bg-blue-600 text-white font-bold text-base flex items-center gap-2"><Receipt className="w-5 h-5" />Thông Tin Đơn</div>
+        
         <div className="p-4 border-b bg-gray-50/50 space-y-3">
           <div className="bg-white border rounded px-3 py-2 flex items-center"><User className="w-4 h-4 text-gray-400 mr-2" /><input type="text" placeholder="Tên khách hàng..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="w-full bg-transparent outline-none font-medium" /></div>
           <div className="bg-white border rounded px-3 py-2 flex items-center"><span className="text-xs text-gray-400 mr-2">☎</span><input type="text" placeholder="Số điện thoại..." value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="w-full bg-transparent outline-none font-medium" /></div>
+          
+          {/* 🔥 KHỐI THỜI GIAN VÀ GHI CHÚ */}
+          <div className="space-y-3 mt-4 pt-3 border-t border-gray-200">
+            <div>
+              <label className="text-[10px] font-bold text-gray-500 block mb-1.5 uppercase tracking-wider">Thời gian tạo đơn</label>
+              <input 
+                type="datetime-local" 
+                value={currentDate} 
+                onChange={(e) => setCurrentDate(e.target.value)} 
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-gray-500 block mb-1.5 uppercase tracking-wider">Ghi chú (Tùy chọn)</label>
+              <textarea 
+                placeholder="Khách dặn dò gì thêm..." 
+                value={orderNote} 
+                onChange={(e) => setOrderNote(e.target.value)} 
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all min-h-[60px] custom-scrollbar bg-white"
+              />
+            </div>
+          </div>
         </div>
+
         <div className="p-4 border-b text-xs grid grid-cols-2 gap-3">
           <div><label className="font-semibold text-gray-500 block mb-1">Hình thức</label><select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="w-full border rounded p-1.5 outline-none bg-gray-50"><option value="Tiền mặt">Tiền mặt</option><option value="Chuyển khoản">Chuyển khoản</option></select></div>
           <div><label className="font-semibold text-gray-500 block mb-1">Trạng thái</label><select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className="w-full border rounded p-1.5 font-bold outline-none bg-gray-50 text-blue-700"><option value="Đã thanh toán">Đã thanh toán đủ</option><option value="Chưa thanh toán">Ghi nợ / Đặt cọc</option></select></div>

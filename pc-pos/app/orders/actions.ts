@@ -10,7 +10,6 @@ export async function getOrderItems(orderId: string) {
   return await db.select().from(orderItems).where(eq(orderItems.order_id, orderId));
 }
 
-// BẢO MẬT ADMIN: Xác minh tài khoản mật khẩu trước khi hủy/xóa hóa đơn
 export async function verifyAdminAuth(username: string, password: string) {
   if (username.trim() === "admin" && password === "123456") {
     return { success: true };
@@ -19,9 +18,13 @@ export async function verifyAdminAuth(username: string, password: string) {
 }
 
 export async function updateOrderComplete(orderId: string, updatedData: any) {
-  const { cart, customerName, customerPhone, totalPrice, discount, paymentMethod, status, amountGiven, orderDate } = updatedData;
+  const { cart, customerName, customerPhone, totalPrice, discount, paymentMethod, status, amountGiven, orderDate, note } = updatedData;
 
-  // 1. HOÀN TRẢ LẠI KHO CŨ VÀ LOG LỊCH SỬ HOÀN KHO
+  // 🔥 XỬ LÝ GHI CHÚ: Nối ghi chú lúc sửa đơn
+  const customNote = note ? `${note} | ` : "";
+  const finalNote = `${customNote}Đã sửa đơn | Khách đưa: ${amountGiven} | CK: ${discount}`;
+
+  // 1. HOÀN TRẢ LẠI KHO CŨ
   const oldItems = await db.select().from(orderItems).where(eq(orderItems.order_id, orderId));
   for (const oldItem of oldItems) {
     const [prod] = await db.select().from(products).where(eq(products.name, oldItem.product_name as string)).limit(1);
@@ -30,7 +33,6 @@ export async function updateOrderComplete(orderId: string, updatedData: any) {
       await db.update(products).set({ stock: rolledBackStock }).where(eq(products.id, prod.id));
       
       try {
-        // 🔥 ĐÃ SỬA: Thay db.execute bằng db.run chuẩn thư viện libSQL/Turso
         await db.run(sql`
           INSERT INTO stock_history (product_name, change_amount, new_balance, type, note, date)
           VALUES (${prod.name}, ${oldItem.quantity || 0}, ${rolledBackStock}, 'Nhập kho', ${`Hoàn kho phục vụ sửa đơn #${orderId}`}, ${orderDate})
@@ -48,7 +50,7 @@ export async function updateOrderComplete(orderId: string, updatedData: any) {
     total_price: totalPrice,
     payment_method: paymentMethod,
     status: status,
-    note: `Đã sửa đơn | Khách đưa: ${amountGiven} | Chiết khấu: ${discount}`,
+    note: finalNote,
   }).where(eq(orders.id, orderId));
 
   // 3. TRỪ KHO THEO ĐƠN MỚI SAU KHI SỬA
@@ -69,7 +71,6 @@ export async function updateOrderComplete(orderId: string, updatedData: any) {
       await db.update(products).set({ stock: finalStock }).where(eq(products.id, prod.id));
 
       try {
-        // 🔥 ĐÃ SỬA: Thay db.execute bằng db.run
         await db.run(sql`
           INSERT INTO stock_history (product_name, change_amount, new_balance, type, note, date)
           VALUES (${prod.name}, ${-(item.quantity || 0)}, ${finalStock}, 'Xuất kho', ${`Xuất kho sau khi sửa đơn #${orderId}`}, ${orderDate})
@@ -82,12 +83,11 @@ export async function updateOrderComplete(orderId: string, updatedData: any) {
   return { success: true };
 }
 
-// 🔥 TÍNH NĂNG MỚI: XÓA MỀM (SOFT DELETE) - TRẢ KHO NHƯNG LƯU VẾT
+// XÓA MỀM (SOFT DELETE)
 export async function deleteOrder(orderId: string) {
   const items = await db.select().from(orderItems).where(eq(orderItems.order_id, orderId));
   const nowStr = new Date().toLocaleString('vi-VN');
   
-  // Trả lại kho toàn bộ hàng hóa của đơn bị hủy
   for (const item of items) {
     const [prod] = await db.select().from(products).where(eq(products.name, item.product_name as string)).limit(1);
     if (prod) {
@@ -95,7 +95,6 @@ export async function deleteOrder(orderId: string) {
       await db.update(products).set({ stock: rolledBackStock }).where(eq(products.id, prod.id));
 
       try {
-        // 🔥 ĐÃ SỬA: Thay db.execute bằng db.run
         await db.run(sql`
           INSERT INTO stock_history (product_name, change_amount, new_balance, type, note, date)
           VALUES (${prod.name}, ${item.quantity || 0}, ${rolledBackStock}, 'Nhập kho', ${`Hoàn trả kho do HỦY ĐƠN #${orderId}`}, ${nowStr})
@@ -104,10 +103,8 @@ export async function deleteOrder(orderId: string) {
     }
   }
   
-  // KHÔNG XÓA ROW: Chỉ cập nhật trạng thái đơn hàng thành "Đã hủy"
   await db.update(orders).set({ status: "Đã hủy" }).where(eq(orders.id, orderId));
   
-  // Làm mới bộ đệm toàn hệ thống
   revalidatePath("/orders"); revalidatePath("/products"); revalidatePath("/pos"); revalidatePath("/reports");
   return { success: true };
 }

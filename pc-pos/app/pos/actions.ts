@@ -2,79 +2,73 @@
 "use server";
 
 import { db } from "../../src/db";
-import { customers, orders, orderItems, products } from "../../src/db/schema";
-// Giả định sếp có bảng stock_history trong db, nếu chưa chạy migration thì cứ tạo bảng trước nhé sếp
-import { sql } from "drizzle-orm"; 
-import { eq } from "drizzle-orm";
+import { orders, orderItems, products, customers } from "../../src/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function quickAddCustomer(name: string, phone: string) {
-  const [newCustomer] = await db.insert(customers).values({
-    name: name.trim(),
-    phone: phone.trim(),
-  }).returning();
+  const newCus = await db.insert(customers).values({ name, phone }).returning({ id: customers.id });
   revalidatePath("/pos");
-  return newCustomer;
+  revalidatePath("/customers");
+  return newCus[0].id;
 }
 
-export async function createOrder(orderData: any) {
-  const {
-    cart,
-    customerName,
-    customerPhone,
-    totalPrice, 
-    discount,
-    paymentMethod,
-    status,
-    amountGiven,
-    orderDate,
-  } = orderData;
+export async function createOrder(data: any) {
+  const { cart, customerName, customerPhone, totalPrice, discount, paymentMethod, status, amountGiven, orderDate, note } = data;
 
-  const orderId = "DH" + Date.now().toString().slice(-6);
+  // 🔥 XỬ LÝ GHI CHÚ: Nối ghi chú tay của khách với thông tin dòng tiền
+  const customNote = note ? `${note} | ` : "";
+  const finalNote = `${customNote}Khách đưa: ${amountGiven} | CK: ${discount}`;
 
-  // 1. Lưu hóa đơn chính
-  await db.insert(orders).values({
-    id: orderId,
-    customer_name: customerName || "Khách vãng lai",
+  // 🔥 TỰ TẠO MÃ ĐƠN HÀNG DUY NHẤT (Ví dụ: DH1720000123456)
+  const newOrderId = `DH${Date.now()}`;
+
+  // 1. TẠO ĐƠN HÀNG VÀO DATABASE
+  const newOrder = await db.insert(orders).values({
+    id: newOrderId, // 🔥 Fix triệt để lỗi thiếu ID của TypeScript
+    customer_name: customerName,
     customer_phone: customerPhone,
-    date: orderDate,
+    date: orderDate, // Dùng ngày giờ sếp chọn trên giao diện
     total_price: totalPrice,
     payment_method: paymentMethod,
     status: status,
-    note: `Khách đưa: ${amountGiven} | Chiết khấu: ${discount}`,
-  });
+    note: finalNote,
+  }).returning({ id: orders.id });
 
-  // 2. Quét giỏ hàng: Lưu chi tiết, Trừ kho & Ghi lịch sử kho
+  const orderId = newOrder[0].id;
+
+  // 2. THÊM CHI TIẾT ĐƠN VÀ TRỪ TỒN KHO
   for (const item of cart) {
     await db.insert(orderItems).values({
-      order_id: orderId,
+      order_id: orderId.toString(),
       product_name: item.product.name,
       quantity: item.quantity,
       price: item.product.price_sell,
       price_import: item.product.price_import || 0,
       unit: item.product.unit || "Cái",
-      // Đút mã Serial/IMEI vào cột note hoặc cột serials tùy cấu trúc schema của sếp
-      serials: item.serials || "", 
+      serials: item.serials || "",
     } as any);
 
-    // Trừ kho vật lý
-    const newStock = (item.product.stock || 0) - item.quantity;
-    await db.update(products)
-      .set({ stock: newStock })
-      .where(eq(products.id, item.product.id));
+    const [prod] = await db.select().from(products).where(eq(products.id, item.product.id)).limit(1);
+    if (prod) {
+      const newStock = (prod.stock || 0) - (item.quantity || 0);
+      await db.update(products).set({ stock: newStock }).where(eq(products.id, prod.id));
 
-    // GHI LỊCH SỬ KHO (Giống hệt app Flutter cũ của sếp)
-    try {
-await db.run(sql`
-  INSERT INTO stock_history (product_name, change_amount, new_balance, type, note, date)
-  VALUES (${item.product.name}, ${-item.quantity}, ${newStock}, 'Xuất kho', ${`Bán đơn...`}
-`);
-    } catch (e) {
-      console.log("Chưa chạy migration bảng stock_history nhưng đơn vẫn lưu tốt sếp nhé!");
+      // Ghi log lịch sử xuất kho (Dùng db.run chuẩn Turso)
+      try {
+        await db.run(sql`
+          INSERT INTO stock_history (product_name, change_amount, new_balance, type, note, date)
+          VALUES (${prod.name}, ${-(item.quantity || 0)}, ${newStock}, 'Xuất kho', ${`Bán đơn #${orderId}`}, ${orderDate})
+        `);
+      } catch(e) { console.error("Lỗi log kho:", e); }
     }
   }
 
+  // Cập nhật lại giao diện ngay lập tức
   revalidatePath("/pos");
   revalidatePath("/orders");
+  revalidatePath("/products");
+  revalidatePath("/reports");
+
   return orderId;
 }
