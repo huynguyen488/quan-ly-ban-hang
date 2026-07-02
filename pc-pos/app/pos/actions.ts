@@ -182,6 +182,10 @@ export async function deleteOrder(orderId: string) {
     db.update(orders).set({ status: "Đã hủy" }).where(eq(orders.id, orderId))
   ]);
   
-  revalidatePath("/orders"); revalidatePath("/products"); revalidatePath("/reports");
+ revalidatePath("/pos"); 
+revalidatePath("/orders"); 
+revalidatePath("/products"); 
+revalidatePath("/customers"); // 🔥 Thêm dòng này để ép cập nhật dư nợ!
+revalidatePath("/debts");     // 🔥 Thêm luôn dòng này để sau này trang Công nợ cũng tự cập nhật
   return { success: true };
 }
