@@ -3,6 +3,9 @@ import { db } from "../../src/db";
 import { orders, products, orderItems } from "../../src/db/schema";
 import { desc } from "drizzle-orm";
 import OrderClient from "./OrderClient";
+// Thêm 2 dòng này vào đầu file app/orders/page.tsx
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function OrdersPage() {
   // Lấy toàn bộ Đơn hàng, Sản phẩm gốc và Chi tiết các món đã bán
