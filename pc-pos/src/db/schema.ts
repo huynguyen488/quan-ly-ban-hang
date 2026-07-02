@@ -17,6 +17,7 @@ export const customers = sqliteTable('customers', {
   email: text('email'),
   address: text('address'),
   note: text('note'),
+  created_at: text("created_at"),
 });
 
 // 3. BẢNG SẢN PHẨM (Products)

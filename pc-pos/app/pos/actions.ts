@@ -17,20 +17,34 @@ export async function verifyAdminAuth(username: string, password: string) {
   return { success: false, message: "Sai tài khoản hoặc mật khẩu quản trị!" };
 }
 
-// 🔥 HÀM THÊM KHÁCH NHANH TỪ POS (Full Tên, SĐT, Địa chỉ, Ghi chú)
+// 🔥 BỌC THÉP HÀM THÊM KHÁCH: Lưu kèm thời gian tạo
 export async function quickAddCustomer(name: string, phone: string, address: string = "", note: string = "") {
+  
+  // Tự động tạo chuỗi ngày giờ chuẩn Việt Nam (HH:mm:ss DD/MM/YYYY)
+  const now = new Date();
+  const tzOffset = now.getTimezoneOffset() * 60000;
+  const localNow = new Date(now.getTime() - tzOffset);
+  
+  const day = localNow.getDate().toString().padStart(2, '0');
+  const month = (localNow.getMonth() + 1).toString().padStart(2, '0');
+  const year = localNow.getFullYear();
+  const hours = localNow.getHours().toString().padStart(2, '0');
+  const minutes = localNow.getMinutes().toString().padStart(2, '0');
+  
+  const createdAtStr = `${hours}:${minutes}:00 ${day}/${month}/${year}`;
+
   const newCus = await db.insert(customers).values({ 
     name, 
     phone, 
     address, 
-    note 
+    note,
+    created_at: createdAtStr // 🔥 Ghi nhận ngày tạo vào Database
   }).returning({ id: customers.id });
   
   revalidatePath("/pos");
   revalidatePath("/customers");
   return newCus[0].id;
 }
-
 // ==========================================
 // 1. TẠO ĐƠN HÀNG MỚI (TỐI ƯU SIÊU TỐC)
 // ==========================================

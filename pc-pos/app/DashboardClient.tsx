@@ -5,13 +5,12 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { 
   TrendingUp, ShoppingBag, Users, AlertCircle, 
-  Wallet, ChevronRight, Receipt, PackageOpen
+  Wallet, ChevronRight, Receipt
 } from "lucide-react";
 
 export default function DashboardClient({ orders, customers, products, receipts }: any) {
-  const [timeRange, setTimeRange] = useState("month"); // today, month, all
+  const [timeRange, setTimeRange] = useState("month"); 
 
-  // 1. HÀM DỊCH NGÀY CHUẨN (Chống lỗi múi giờ)
   const parseSafeDate = (dateStr: string) => {
     if (!dateStr || dateStr === '---') return new Date(0);
     const dateMatch = String(dateStr).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{3,4})/);
@@ -20,7 +19,7 @@ export default function DashboardClient({ orders, customers, products, receipts 
       const day = dateMatch[1].padStart(2, '0');
       const month = dateMatch[2].padStart(2, '0');
       let year = dateMatch[3];
-      if (year.length === 3 && year.startsWith('202')) year = '2026'; // Fix lỗi năm 202
+      if (year.length === 3 && year.startsWith('202')) year = '2026'; 
       let hours = "00", minutes = "00";
       if (timeMatch) { hours = timeMatch[1].padStart(2, '0'); minutes = timeMatch[2].padStart(2, '0'); }
       const d = new Date(`${year}-${month}-${day}T${hours}:${minutes}:00`);
@@ -30,7 +29,6 @@ export default function DashboardClient({ orders, customers, products, receipts 
     return isNaN(fallback.getTime()) ? new Date(0) : fallback;
   };
 
-  // 2. LỌC ĐƠN HÀNG THEO THỜI GIAN
   const filteredOrders = useMemo(() => {
     const now = new Date();
     return orders.filter((o: any) => {
@@ -47,18 +45,34 @@ export default function DashboardClient({ orders, customers, products, receipts 
     });
   }, [orders, timeRange]);
 
-  // Loại bỏ đơn Hủy khỏi các phép tính doanh thu
+  // 🔥 TÍNH SỐ KHÁCH HÀNG MỚI TRONG KỲ
+  const newCustomersCount = useMemo(() => {
+    const now = new Date();
+    return customers.filter((c: any) => {
+      if (timeRange === 'all') return true;
+      if (!c.created_at) return false; // Khách cũ trước đây chưa có ngày tạo thì bỏ qua
+      
+      const d = parseSafeDate(c.created_at);
+      if (d.getTime() === 0) return false;
+      
+      if (timeRange === 'today') {
+        return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }
+      if (timeRange === 'month') {
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }
+      return true;
+    }).length;
+  }, [customers, timeRange]);
+
   const validOrders = filteredOrders.filter((o: any) => {
       const s = String(o.status || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       return !(s.includes("huy") || s.includes("cancel"));
   });
 
-  // TÍNH CHỈ SỐ CARDS
   const totalRevenue = validOrders.reduce((sum: number, o: any) => sum + (Number(o.total_price) || 0), 0);
   const totalOrdersCount = validOrders.length;
-  const totalCustomersCount = customers.length;
-
-  // 3. LOGIC TÍNH TỔNG DƯ NỢ (Tất cả thời gian) & TÌM KHÁCH NỢ NHIỀU NHẤT
+  
   const normalize = (s: string | null) => String(s || "").trim().toLowerCase();
   
   const customerDebts = customers.map((cus: any) => {
@@ -80,17 +94,12 @@ export default function DashboardClient({ orders, customers, products, receipts 
   });
 
   const totalSystemDebt = customerDebts.reduce((sum: number, c: any) => sum + c.debt, 0);
-  
-  // Lấy Top 5 khách nợ nhiều nhất
   const topDebtors = customerDebts.filter((c: any) => c.debt > 0).sort((a: any, b: any) => b.debt - a.debt).slice(0, 5);
-
-  // 4. LỌC SẢN PHẨM SẮP HẾT HÀNG (Tồn kho <= 5)
   const lowStockProducts = products.filter((p: any) => (Number(p.stock) || 0) <= 5).sort((a: any, b: any) => (Number(a.stock)||0) - (Number(b.stock)||0)).slice(0, 5);
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-full font-sans animate-in fade-in duration-300 pb-20 lg:pb-6">
       
-      {/* 🌟 HEADER & FILTER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
           <h1 className="text-xl lg:text-2xl font-black text-gray-800 tracking-tight">Tổng Quan Hệ Thống</h1>
@@ -109,7 +118,6 @@ export default function DashboardClient({ orders, customers, products, receipts 
         </div>
       </div>
 
-      {/* 🌟 4 THẺ THỐNG KÊ QUAN TRỌNG */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-blue-200 transition-all">
           <div>
@@ -127,10 +135,11 @@ export default function DashboardClient({ orders, customers, products, receipts 
           <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform"><ShoppingBag className="w-6 h-6" /></div>
         </div>
 
+        {/* 🔥 THẺ KHÁCH HÀNG MỚI ĐÃ ĐƯỢC CẬP NHẬT */}
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-orange-200 transition-all">
           <div>
-            <p className="text-[10px] lg:text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-1">Tổng Số Khách Hàng</p>
-            <h3 className="text-2xl font-black text-orange-600">{totalCustomersCount} <span className="text-sm font-bold text-orange-400">người</span></h3>
+            <p className="text-[10px] lg:text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-1">Khách Mới ({timeRange === 'today' ? 'Hôm nay' : timeRange === 'month' ? 'Tháng này' : 'Tất cả'})</p>
+            <h3 className="text-2xl font-black text-orange-600">{newCustomersCount} <span className="text-sm font-bold text-orange-400">người</span></h3>
           </div>
           <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center text-orange-500 group-hover:scale-110 transition-transform"><Users className="w-6 h-6" /></div>
         </div>
@@ -144,10 +153,7 @@ export default function DashboardClient({ orders, customers, products, receipts 
         </div>
       </div>
 
-      {/* 🌟 NỘI DUNG CHÍNH (Cột trái Bảng, Cột phải Cảnh báo) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* ĐƠN HÀNG GẦN ĐÂY (Chiếm 2/3 không gian trên PC) */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
            <div className="p-4 lg:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h3 className="font-extrabold text-gray-800 flex items-center gap-2 text-sm lg:text-base"><Receipt className="w-5 h-5 text-blue-500"/> Giao Dịch Gần Đây</h3>
@@ -183,10 +189,7 @@ export default function DashboardClient({ orders, customers, products, receipts 
            </div>
         </div>
 
-        {/* RADAR CẢNH BÁO (Chiếm 1/3 không gian trên PC) */}
         <div className="space-y-6">
-          
-          {/* Cảnh báo nợ xấu */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
             <div className="p-4 border-b border-gray-100 bg-rose-50/50 flex justify-between items-center">
               <h3 className="font-extrabold text-rose-800 flex items-center gap-2 text-sm"><Wallet className="w-5 h-5 text-rose-500"/> Khách Nợ Nhiều Nhất</h3>
@@ -205,7 +208,6 @@ export default function DashboardClient({ orders, customers, products, receipts 
             </div>
           </div>
 
-          {/* Cảnh báo Hết hàng */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
             <div className="p-4 border-b border-gray-100 bg-orange-50/50 flex justify-between items-center">
               <h3 className="font-extrabold text-orange-800 flex items-center gap-2 text-sm"><AlertCircle className="w-5 h-5 text-orange-500"/> Cảnh Báo Sắp Hết Hàng</h3>
@@ -224,7 +226,6 @@ export default function DashboardClient({ orders, customers, products, receipts 
                )) : <p className="p-6 text-center text-xs text-gray-500 font-medium">Kho hàng đang dồi dào, sẵn sàng chiến đấu!</p>}
             </div>
           </div>
-
         </div>
       </div>
     </div>

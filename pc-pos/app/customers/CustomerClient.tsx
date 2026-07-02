@@ -2,14 +2,17 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation"; // 🔥 Thêm import router để điều hướng
-import { Search, PlusCircle, Edit, Trash2, X, MapPin, Phone, User, Loader2, Save, AlertTriangle, ShieldCheck, Eye } from "lucide-react";
+import { useRouter } from "next/navigation"; 
+import { Search, PlusCircle, Edit, Trash2, X, MapPin, Phone, User, Loader2, Save, AlertTriangle, ShieldCheck, Eye, Calendar } from "lucide-react"; // 🔥 Đã thêm icon Calendar
 import { createCustomer, updateCustomer, deleteCustomer, verifyAdminAuth } from "./actions";
 
 export default function CustomerClient({ initialCustomers }: { initialCustomers: any[] }) {
-  const router = useRouter(); // 🔥 Kích hoạt router
+  const router = useRouter(); 
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // 🔥 THÊM BỘ LỌC THỜI GIAN CHO KHÁCH MỚI
+  const [timeRange, setTimeRange] = useState("month");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -33,6 +36,36 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // 🔥 HÀM TÍNH TOÁN SỐ KHÁCH MỚI THEO KỲ
+  const parseSafeDate = (dateStr: string) => {
+    if (!dateStr || dateStr === '---') return new Date(0);
+    const dateMatch = String(dateStr).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{3,4})/);
+    if (dateMatch) {
+      const day = dateMatch[1].padStart(2, '0');
+      const month = dateMatch[2].padStart(2, '0');
+      let year = dateMatch[3];
+      if (year.length === 3 && year.startsWith('202')) year = '2026';
+      return new Date(`${year}-${month}-${day}T00:00:00`);
+    }
+    const fallback = new Date(dateStr);
+    return isNaN(fallback.getTime()) ? new Date(0) : fallback;
+  };
+
+  const newCustomersInPeriod = initialCustomers.filter(cus => {
+    if (timeRange === 'all') return true;
+    if (!cus.created_at) return false;
+    const d = parseSafeDate(cus.created_at);
+    if (d.getTime() === 0) return false;
+    const now = new Date();
+    if (timeRange === 'today') {
+      return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }
+    if (timeRange === 'month') {
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }
+    return true;
+  }).length;
 
   const filteredCustomers = initialCustomers.filter((cus) =>
     cus.name?.toLowerCase().includes(searchTerm.toLowerCase()) || cus.phone?.includes(searchTerm)
@@ -128,7 +161,17 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
       </div>
 
       <div className="mb-4 bg-gradient-to-r from-orange-50 to-amber-50/50 border border-orange-100 rounded-xl p-3.5 flex flex-wrap justify-around items-center gap-4 text-gray-700 font-semibold shadow-sm">
-        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm"><span className="text-xs text-gray-500">Tổng khách hệ thống:</span> <span className="font-bold text-blue-700 text-sm">{initialCustomers.length} người</span></div>
+        
+        {/* 🔥 Ô THỐNG KÊ MỚI CÓ DROPDOWN CHỌN KỲ */}
+        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm">
+           <select value={timeRange} onChange={(e) => setTimeRange(e.target.value)} className="text-xs text-gray-500 bg-transparent outline-none cursor-pointer font-medium hover:text-blue-600 transition-colors">
+             <option value="today">Khách mới hôm nay:</option>
+             <option value="month">Khách mới tháng này:</option>
+             <option value="all">Tổng khách hệ thống:</option>
+           </select>
+           <span className="font-bold text-blue-700 text-sm">{timeRange === 'all' ? initialCustomers.length : newCustomersInPeriod} người</span>
+        </div>
+
         <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm"><span className="text-xs text-gray-500">Khách VIP ({'>'}10 triệu):</span> <span className="font-bold text-emerald-600 text-sm">{vipCustomers} người</span></div>
         <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm"><span className="text-xs text-gray-500">Tổng dư nợ đang treo:</span> <span className="font-bold text-red-600 text-sm">{totalSystemDebt.toLocaleString('vi-VN')} đ</span></div>
       </div>
@@ -153,7 +196,6 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
                   <tr key={cus.id} className="hover:bg-blue-50/30 even:bg-gray-50/20 transition-colors">
                     <td className="px-5 py-4 text-center font-bold text-gray-400">#{cus.id}</td>
                     
-                    {/* 🔥 NÂNG CẤP: Click vào tên khách hàng sẽ nhảy thẳng sang trang chi tiết hồ sơ */}
                     <td className="px-5 py-4">
                       <div 
                         onClick={() => router.push(`/customers/${cus.id}`)}
@@ -163,6 +205,12 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
                         {cus.name}
                       </div>
                       <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1 font-mono"><Phone className="w-3 h-3 text-blue-400" /> {cus.phone || 'Chưa cập nhật SĐT'}</div>
+                      
+                      {/* 🔥 HIỂN THỊ NGÀY TẠO Ở BẢNG */}
+                      <div className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1 font-mono">
+                        <Calendar className="w-3 h-3 text-gray-300" /> 
+                        {cus.created_at ? `Tạo: ${cus.created_at.includes(' ') ? cus.created_at.split(' ')[1] : cus.created_at}` : 'Khách cũ'}
+                      </div>
                     </td>
                     
                     <td className="px-5 py-4">
@@ -176,7 +224,6 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
                     </td>
                     <td className="px-5 py-4 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        {/* 🔥 NÚT ICON XEM CHI TIẾT NHANH */}
                         <button onClick={() => router.push(`/customers/${cus.id}`)} className="p-1.5 text-purple-500 hover:bg-purple-100 rounded-md transition-colors" title="Xem hồ sơ giao dịch"><Eye className="w-4 h-4" /></button>
                         <button onClick={() => handleOpenEdit(cus)} className="p-1.5 text-blue-500 hover:bg-blue-100 rounded-md transition-colors" title="Chỉnh sửa"><Edit className="w-4 h-4" /></button>
                         <button onClick={() => triggerDelete(cus)} disabled={isLoading} className={`p-1.5 rounded-md transition-colors ${cus.totalOrders > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`} title={cus.totalOrders > 0 ? "Không thể xóa khách đang có đơn hàng" : "Xóa khách hàng"}><Trash2 className="w-4 h-4" /></button>
@@ -190,7 +237,7 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
         </div>
       </div>
 
-      {/* MODAL THÊM/SỬA KHÁCH HÀNG */}
+      {/* MODAL THÊM/SỬA KHÁCH HÀNG (Giữ nguyên) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-150 overflow-visible">
@@ -224,7 +271,7 @@ export default function CustomerClient({ initialCustomers }: { initialCustomers:
         </div>
       )}
 
-      {/* POPUP BẢO VỆ XÓA KHÁCH HÀNG */}
+      {/* POPUP BẢO VỆ XÓA KHÁCH HÀNG (Giữ nguyên) */}
       {isAuthOpen && customerToDelete && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
           <div className="bg-white p-6 rounded-2xl w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-150">
